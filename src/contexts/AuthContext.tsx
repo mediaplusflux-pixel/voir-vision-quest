@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -46,24 +45,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const validateKey = async (key: string): Promise<{ success: boolean; message: string }> => {
     try {
       const machineId = getMachineId();
-      const ipAddress = ''; // IP detection would require server-side implementation
-
+      
+      // Import Supabase dynamically to avoid initialization errors
+      const { supabase } = await import('@/integrations/supabase/client');
+      
       const { data, error } = await supabase.functions.invoke('validate-activation-key', {
-        body: { key, machineId, ipAddress }
+        body: { key, machineId, ipAddress: '' }
       });
 
       if (error) {
+        console.error('Supabase error:', error);
         return { success: false, message: 'Erreur de validation' };
       }
 
-      if (data.valid) {
+      if (data?.valid) {
         localStorage.setItem('activation_key_id', data.keyId);
         localStorage.setItem('activation_expires_at', data.expiresAt);
         setIsAuthenticated(true);
         return { success: true, message: data.message };
       }
 
-      return { success: false, message: data.message };
+      return { success: false, message: data?.message || 'Clé invalide' };
     } catch (error) {
       console.error('Validation error:', error);
       return { success: false, message: 'Erreur de connexion' };
