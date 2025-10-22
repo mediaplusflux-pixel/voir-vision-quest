@@ -1,1 +1,4 @@
 project_id = "ritdznjnleoeamhkdeeh"
+
+[functions.validate-activation-key]
+verify_jwt = false

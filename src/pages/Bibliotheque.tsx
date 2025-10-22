@@ -1,10 +1,16 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import MediaCard from "@/components/MediaCard";
+import VideoPlayer from "@/components/VideoPlayer";
 import Header from "@/components/Header";
+import { useState } from "react";
 
 const Bibliotheque = () => {
+  const [previewVideo, setPreviewVideo] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   const inputs = [
     {
       id: 1,
@@ -117,7 +123,10 @@ const Bibliotheque = () => {
                 timeAgo={input.timeAgo}
                 type={input.type}
                 thumbnail={input.thumbnail}
-                onPreview={() => console.log("Preview", input.title)}
+                onPreview={() => {
+                  setPreviewVideo(input.thumbnail);
+                  setIsPreviewOpen(true);
+                }}
                 onDelete={() => console.log("Delete", input.title)}
                 onAddToGrid={() => console.log("Add to grid", input.title)}
               />
@@ -139,6 +148,15 @@ const Bibliotheque = () => {
           </div>
         </main>
       </div>
+
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Prévisualisation</DialogTitle>
+          </DialogHeader>
+          <VideoPlayer src={previewVideo || undefined} className="w-full aspect-video" />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

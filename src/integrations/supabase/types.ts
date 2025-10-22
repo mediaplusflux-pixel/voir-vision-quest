@@ -14,13 +14,95 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activation_keys: {
+        Row: {
+          activated_at: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          ip_address: string | null
+          is_active: boolean
+          key: string
+          machine_id: string | null
+          max_usage: number | null
+          notes: string | null
+          usage_count: number
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          key: string
+          machine_id?: string | null
+          max_usage?: number | null
+          notes?: string | null
+          usage_count?: number
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          key?: string
+          machine_id?: string | null
+          max_usage?: number | null
+          notes?: string | null
+          usage_count?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          activation_key_id: string | null
+          channel_name: string | null
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activation_key_id?: string | null
+          channel_name?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activation_key_id?: string | null
+          channel_name?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_activation_key_id_fkey"
+            columns: ["activation_key_id"]
+            isOneToOne: false
+            referencedRelation: "activation_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_activation_key: {
+        Args: { duration_months?: number }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
