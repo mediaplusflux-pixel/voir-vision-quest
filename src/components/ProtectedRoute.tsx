@@ -1,10 +1,12 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isAdmin, isLoading: isAdminLoading } = useAdminAuth();
 
-  if (isLoading) {
+  if (isLoading || isAdminLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -15,6 +17,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
+  // If user is admin, allow access without activation key
+  if (isAdmin) {
+    return <>{children}</>;
+  }
+
+  // Otherwise, require activation key
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
