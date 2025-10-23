@@ -90,6 +90,17 @@ const Login = () => {
             <p>Besoin d'une clé d'activation ?</p>
             <p>Contactez votre administrateur</p>
           </div>
+          
+          <div className="mt-4 text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/admin-login")}
+              className="text-muted-foreground hover:text-primary"
+            >
+              Accès administrateur
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
