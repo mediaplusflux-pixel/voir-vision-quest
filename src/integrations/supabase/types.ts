@@ -120,6 +120,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_admin_to_email: {
+        Args: { admin_email: string }
+        Returns: undefined
+      }
       generate_activation_key: {
         Args: { duration_months?: number }
         Returns: string

@@ -103,15 +103,8 @@ const AdminLogin = () => {
             </Button>
           </form>
           
-          <div className="mt-4 text-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/admin-signup")}
-              className="text-muted-foreground hover:text-primary"
-            >
-              Créer un compte administrateur
-            </Button>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            <p>Administrateur : thiernodk2@gmail.com</p>
           </div>
         </CardContent>
       </Card>
