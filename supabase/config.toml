@@ -2,3 +2,6 @@ project_id = "ritdznjnleoeamhkdeeh"
 
 [functions.validate-activation-key]
 verify_jwt = false
+
+[functions.create-first-admin]
+verify_jwt = false
