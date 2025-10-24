@@ -39,30 +39,24 @@ const AdminSignup = () => {
     setIsLoading(true);
 
     try {
-      // Create the user account
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-        }
+      // Call the edge function to create the first admin
+      const { data, error } = await supabase.functions.invoke('create-first-admin', {
+        body: { email, password }
       });
 
-      if (authError) throw authError;
+      if (error) throw error;
 
-      if (!authData.user) {
-        throw new Error("Erreur lors de la création du compte");
+      if (data.error) {
+        throw new Error(data.error);
       }
 
-      // Add admin role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: authData.user.id,
-          role: 'admin'
-        });
+      // Now sign in the newly created admin
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (roleError) throw roleError;
+      if (signInError) throw signInError;
 
       toast({
         title: "Compte créé avec succès",
