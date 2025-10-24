@@ -7,47 +7,72 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Shield } from "lucide-react";
 
-const AdminLogin = () => {
+const AdminSignup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (password !== confirmPassword) {
+      toast({
+        title: "Erreur",
+        description: "Les mots de passe ne correspondent pas",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Erreur",
+        description: "Le mot de passe doit contenir au moins 6 caractères",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Create the user account
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/admin`,
+        }
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
-      // Check if user has admin role
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', data.user.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (!roleData) {
-        await supabase.auth.signOut();
-        throw new Error("Accès non autorisé. Seuls les administrateurs peuvent se connecter.");
+      if (!authData.user) {
+        throw new Error("Erreur lors de la création du compte");
       }
 
+      // Add admin role
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .insert({
+          user_id: authData.user.id,
+          role: 'admin'
+        });
+
+      if (roleError) throw roleError;
+
       toast({
-        title: "Connexion réussie",
-        description: "Bienvenue, administrateur",
+        title: "Compte créé avec succès",
+        description: "Votre compte administrateur a été créé",
       });
 
       navigate("/admin");
     } catch (error: any) {
       toast({
-        title: "Erreur de connexion",
+        title: "Erreur",
         description: error.message,
         variant: "destructive",
       });
@@ -63,13 +88,13 @@ const AdminLogin = () => {
           <div className="flex justify-center mb-4">
             <Shield className="w-16 h-16 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Administration</CardTitle>
+          <CardTitle className="text-2xl">Créer un compte administrateur</CardTitle>
           <CardDescription>
-            Connectez-vous pour accéder à l'interface administrateur
+            Créez votre premier compte administrateur
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -98,8 +123,22 @@ const AdminLogin = () => {
                 disabled={isLoading}
               />
             </div>
+            <div className="space-y-2">
+              <label htmlFor="confirmPassword" className="text-sm font-medium">
+                Confirmer le mot de passe
+              </label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                disabled={isLoading}
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Connexion..." : "Se connecter"}
+              {isLoading ? "Création..." : "Créer le compte"}
             </Button>
           </form>
           
@@ -107,10 +146,10 @@ const AdminLogin = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/admin-signup")}
+              onClick={() => navigate("/admin-login")}
               className="text-muted-foreground hover:text-primary"
             >
-              Créer un compte administrateur
+              Déjà un compte ? Se connecter
             </Button>
           </div>
         </CardContent>
@@ -119,4 +158,4 @@ const AdminLogin = () => {
   );
 };
 
-export default AdminLogin;
+export default AdminSignup;

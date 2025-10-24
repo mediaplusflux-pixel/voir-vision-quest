@@ -14,6 +14,7 @@ import Grille from "./pages/Grille";
 import Transmission from "./pages/Transmission";
 import Login from "./pages/Login";
 import AdminLogin from "./pages/AdminLogin";
+import AdminSignup from "./pages/AdminSignup";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -30,6 +31,7 @@ const App = () => (
             <Routes>
               {/* Admin routes */}
               <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin-signup" element={<AdminSignup />} />
               <Route path="/admin" element={<AdminProtectedRoute><Admin /></AdminProtectedRoute>} />
               
               {/* User routes */}
