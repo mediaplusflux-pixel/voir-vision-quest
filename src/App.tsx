@@ -13,6 +13,7 @@ import Chaines from "./pages/Chaines";
 import Grille from "./pages/Grille";
 import Transmission from "./pages/Transmission";
 import Login from "./pages/Login";
+import Auth from "./pages/Auth";
 import AdminLogin from "./pages/AdminLogin";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -28,12 +29,15 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              {/* Admin routes */}
+              {/* Auth routes */}
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/login" element={<Login />} />
               <Route path="/admin-login" element={<AdminLogin />} />
+              
+              {/* Admin routes */}
               <Route path="/admin" element={<AdminProtectedRoute><Admin /></AdminProtectedRoute>} />
               
               {/* User routes */}
-              <Route path="/login" element={<Login />} />
               <Route path="/" element={<ProtectedRoute><Antenne /></ProtectedRoute>} />
               <Route path="/bibliotheque" element={<ProtectedRoute><Bibliotheque /></ProtectedRoute>} />
               <Route path="/chaines" element={<ProtectedRoute><Chaines /></ProtectedRoute>} />
