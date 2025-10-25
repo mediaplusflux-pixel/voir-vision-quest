@@ -1,58 +1,195 @@
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import MediaCard from "@/components/MediaCard";
 import VideoPlayer from "@/components/VideoPlayer";
 import Header from "@/components/Header";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
+import { fr } from "date-fns/locale";
+
+interface MediaItem {
+  id: string;
+  title: string;
+  duration: number | null;
+  created_at: string;
+  type: string;
+  file_path: string;
+  thumbnail: string | null;
+}
 
 const Bibliotheque = () => {
   const [previewVideo, setPreviewVideo] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const inputs = [
-    {
-      id: 1,
-      title: "INTRO",
-      duration: "15 s",
-      timeAgo: "6 min. ago",
-      type: "VOD",
-      thumbnail: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop",
-    },
-    {
-      id: 2,
-      title: "SIMUL",
-      duration: "3 m",
-      timeAgo: "6 mn ago",
-      type: "VOD",
-      thumbnail: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=400&h=300&fit=crop",
-    },
-    {
-      id: 3,
-      title: "NIGHT",
-      duration: "4 12",
-      timeAgo: "4 mn ago",
-      type: "VOD",
-      thumbnail: "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=400&h=300&fit=crop",
-    },
-    {
-      id: 4,
-      title: "BEACH",
-      duration: "30 s",
-      timeAgo: "5 mn. ago",
-      type: "VOD",
-      thumbnail: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&h=300&fit=crop",
-    },
-    {
-      id: 6,
-      title: "FEED",
-      duration: "30 mn.",
-      timeAgo: "ago",
-      type: "VOD",
-      thumbnail: "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?w=400&h=300&fit=crop",
-    },
-  ];
+  useEffect(() => {
+    loadMediaItems();
+  }, []);
+
+  const loadMediaItems = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("media_library")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setMediaItems(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les médias",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilisateur non authentifié");
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Validate file type
+        if (!file.type.startsWith("video/")) {
+          toast({
+            title: "Type de fichier invalide",
+            description: `${file.name} n'est pas une vidéo`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        // Create unique file path
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from("media-library")
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        // Get video duration
+        const duration = await getVideoDuration(file);
+
+        // Save metadata to database
+        const { error: dbError } = await supabase
+          .from("media_library")
+          .insert({
+            user_id: user.id,
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            file_path: fileName,
+            file_size: file.size,
+            duration,
+            type: "video",
+          });
+
+        if (dbError) throw dbError;
+      }
+
+      toast({
+        title: "Succès",
+        description: `${files.length} fichier(s) importé(s)`,
+      });
+
+      loadMediaItems();
+    } catch (error: any) {
+      toast({
+        title: "Erreur d'importation",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => resolve(0);
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handlePreview = (item: MediaItem) => {
+    const { data } = supabase.storage
+      .from("media-library")
+      .getPublicUrl(item.file_path);
+    
+    setPreviewVideo(data.publicUrl);
+    setIsPreviewOpen(true);
+  };
+
+  const handleDelete = async (item: MediaItem) => {
+    try {
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from("media-library")
+        .remove([item.file_path]);
+
+      if (storageError) throw storageError;
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from("media_library")
+        .delete()
+        .eq("id", item.id);
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "Supprimé",
+        description: "Le média a été supprimé",
+      });
+
+      loadMediaItems();
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "0s";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,10 +200,23 @@ const Bibliotheque = () => {
         <aside className="w-80 bg-sidebar-background border-r border-sidebar-border p-6 space-y-8">
           <div>
             <h2 className="text-foreground text-2xl font-bold mb-4">Bibliothèque</h2>
-            <Card className="bg-card border-dashed border-2 border-border p-8 cursor-pointer hover:border-primary transition-colors">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Card 
+              className="bg-card border-dashed border-2 border-border p-8 cursor-pointer hover:border-primary transition-colors"
+              onClick={handleFileSelect}
+            >
               <div className="flex flex-col items-center gap-3 text-center">
-                <Plus className="w-12 h-12 text-muted-foreground" />
-                <span className="text-foreground text-sm">Obtenir une autre source...</span>
+                <Upload className="w-12 h-12 text-muted-foreground" />
+                <span className="text-foreground text-sm">
+                  {isUploading ? "Importation en cours..." : "Importer des vidéos locales"}
+                </span>
               </div>
             </Card>
           </div>
@@ -108,43 +258,38 @@ const Bibliotheque = () => {
         {/* Main Content */}
         <main className="flex-1 p-8">
           <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-foreground text-3xl font-bold">Inputs</h1>
+            <h1 className="text-foreground text-3xl font-bold">Mes Vidéos</h1>
             <div className="text-sm text-muted-foreground">
-              Importation d'un fichier <span className="ml-2">13.45.31</span>
+              {mediaItems.length} vidéo(s)
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {inputs.map((input) => (
+            {mediaItems.map((item) => (
               <MediaCard
-                key={input.id}
-                title={input.title}
-                duration={input.duration}
-                timeAgo={input.timeAgo}
-                type={input.type}
-                thumbnail={input.thumbnail}
-                onPreview={() => {
-                  setPreviewVideo(input.thumbnail);
-                  setIsPreviewOpen(true);
-                }}
-                onDelete={() => console.log("Delete", input.title)}
-                onAddToGrid={() => console.log("Add to grid", input.title)}
+                key={item.id}
+                title={item.title}
+                duration={formatDuration(item.duration)}
+                timeAgo={formatDistanceToNow(new Date(item.created_at), { 
+                  addSuffix: true, 
+                  locale: fr 
+                })}
+                type={item.type.toUpperCase()}
+                thumbnail={item.thumbnail || "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop"}
+                onPreview={() => handlePreview(item)}
+                onDelete={() => handleDelete(item)}
+                onAddToGrid={() => console.log("Add to grid", item.title)}
               />
             ))}
 
-            <Card className="bg-card border-border flex items-center justify-center p-8 min-h-[300px]">
-              <div className="text-center text-muted-foreground">
-                <p>Press <span className="text-foreground font-semibold">play INPUT" PLUS</span> on</p>
-                <p><span className="text-foreground font-semibold">Inputs</span> tab to add new...</p>
-              </div>
-            </Card>
-          </div>
-
-          <div className="mt-8 flex justify-center gap-2">
-            <Button variant="secondary" size="sm">1</Button>
-            <Button variant="secondary" size="sm">2</Button>
-            <Button variant="secondary" size="sm">3</Button>
-            <span className="flex items-center px-2 text-muted-foreground">...</span>
+            {mediaItems.length === 0 && (
+              <Card className="bg-card border-border flex items-center justify-center p-8 min-h-[300px] col-span-full">
+                <div className="text-center text-muted-foreground">
+                  <p>Aucune vidéo importée</p>
+                  <p className="mt-2">Cliquez sur <span className="text-foreground font-semibold">"Importer des vidéos locales"</span> pour commencer</p>
+                </div>
+              </Card>
+            )}
           </div>
         </main>
       </div>
