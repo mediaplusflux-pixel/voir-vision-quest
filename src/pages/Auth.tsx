@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
@@ -17,6 +18,13 @@ const Auth = () => {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const { isAdmin } = useAdminAuth();
+
+  const [tab, setTab] = useState("signin");
+
+  const schema = z.object({
+    email: z.string().email("Adresse email invalide"),
+    password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+  });
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -31,6 +39,12 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = schema.safeParse({ email, password });
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message ?? "Veuillez vérifier vos informations.";
+      toast({ title: "Validation requise", description: msg, variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
 
     try {
@@ -49,7 +63,7 @@ const Auth = () => {
         description: "Votre compte a été créé avec succès",
       });
 
-      // Check if user is admin and redirect accordingly
+      // Check if user is admin and redirect accordingly (if session exists)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: roleData } = await supabase
@@ -64,13 +78,26 @@ const Auth = () => {
         } else {
           navigate("/");
         }
+      } else {
+        toast({
+          title: "Vérifiez votre email",
+          description: "Si nécessaire, validez votre adresse pour vous connecter.",
+        });
       }
     } catch (error: any) {
-      toast({
-        title: "Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (error?.status === 422 || /already registered|already exists/i.test(error?.message)) {
+        toast({
+          title: "Compte existant",
+          description: "Un compte existe déjà pour cet email. Veuillez vous connecter.",
+        });
+        setTab("signin");
+      } else {
+        toast({
+          title: "Erreur",
+          description: error?.message ?? "Une erreur est survenue",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +105,12 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = schema.safeParse({ email, password });
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message ?? "Veuillez vérifier vos informations.";
+      toast({ title: "Validation requise", description: msg, variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
 
     try {
@@ -107,9 +140,12 @@ const Auth = () => {
         navigate("/");
       }
     } catch (error: any) {
+      const msg = /invalid login credentials/i.test(error?.message)
+        ? "Identifiants incorrects. Vérifiez votre email et votre mot de passe."
+        : error?.message ?? "Une erreur est survenue";
       toast({
         title: "Erreur",
-        description: error.message,
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -127,7 +163,7 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs value={tab} onValueChange={setTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Connexion</TabsTrigger>
               <TabsTrigger value="signup">Inscription</TabsTrigger>
