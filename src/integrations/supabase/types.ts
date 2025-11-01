@@ -133,6 +133,42 @@ export type Database = {
           },
         ]
       }
+      user_licenses: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          is_active: boolean | null
+          license_key: string
+          license_level: string
+          updated_at: string | null
+          user_id: string
+          validated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          is_active?: boolean | null
+          license_key: string
+          license_level: string
+          updated_at?: string | null
+          user_id: string
+          validated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          license_key?: string
+          license_level?: string
+          updated_at?: string | null
+          user_id?: string
+          validated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null

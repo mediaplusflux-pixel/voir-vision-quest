@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AdminAuthProvider } from "./contexts/AdminAuthContext";
+import { LicenseProvider } from "./contexts/LicenseContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Antenne from "./pages/Antenne";
@@ -24,10 +25,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AdminAuthProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+        <LicenseProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
             <Routes>
               {/* Auth routes */}
               <Route path="/auth" element={<Auth />} />
@@ -48,6 +50,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </LicenseProvider>
       </AuthProvider>
     </AdminAuthProvider>
   </QueryClientProvider>
