@@ -2,3 +2,21 @@ project_id = "ritdznjnleoeamhkdeeh"
 
 [functions.validate-activation-key]
 verify_jwt = false
+
+[functions.verify-user-license]
+verify_jwt = true
+
+[functions.ffmpeg-start]
+verify_jwt = true
+
+[functions.ffmpeg-status]
+verify_jwt = true
+
+[functions.ffmpeg-stop]
+verify_jwt = true
+
+[functions.ffmpeg-transmit]
+verify_jwt = true
+
+[functions.ffmpeg-webhook]
+verify_jwt = false
