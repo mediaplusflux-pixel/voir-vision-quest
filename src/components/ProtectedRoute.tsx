@@ -1,12 +1,34 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const { isAdmin, isLoading: isAdminLoading } = useAdminAuth();
+  const [checkingSession, setCheckingSession] = useState(false);
 
-  if (isLoading || isAdminLoading) {
+  // Extra guard: confirm session before redirecting to avoid false negatives
+  useEffect(() => {
+    let mounted = true;
+    const confirmSession = async () => {
+      if (!isAuthenticated) {
+        setCheckingSession(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          // Give AuthContext a tick to pick up the session event
+          if (mounted) setTimeout(() => setCheckingSession(false), 50);
+        } catch {
+          if (mounted) setCheckingSession(false);
+        }
+      }
+    };
+    confirmSession();
+    return () => { mounted = false; };
+  }, [isAuthenticated]);
+
+  if (isLoading || isAdminLoading || checkingSession) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

@@ -126,6 +126,18 @@ const Auth = () => {
         description: "Bienvenue",
       });
 
+      // Ensure session is fully available before navigating to avoid guard race conditions
+      const waitForSession = async (timeout = 2000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) return session;
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        return null;
+      };
+      await waitForSession();
+
       // Check if user is admin and redirect accordingly
       const { data: roleData } = await supabase
         .from('user_roles')
@@ -135,9 +147,9 @@ const Auth = () => {
         .single();
 
       if (roleData) {
-        navigate("/admin");
+        navigate("/admin", { replace: true });
       } else {
-        navigate("/");
+        navigate("/", { replace: true });
       }
     } catch (error: any) {
       const msg = /invalid login credentials/i.test(error?.message)
