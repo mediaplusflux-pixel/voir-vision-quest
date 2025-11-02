@@ -1,12 +1,11 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface License {
-  id: string;
   license_key: string;
   license_level: string;
   expires_at: string;
   is_active: boolean;
+  validated_at?: string;
 }
 
 interface LicenseContextType {
@@ -17,6 +16,7 @@ interface LicenseContextType {
 }
 
 const LicenseContext = createContext<LicenseContextType | undefined>(undefined);
+const LICENSE_STORAGE_KEY = 'media_plus_license';
 
 export const LicenseProvider = ({ children }: { children: ReactNode }) => {
   const [license, setLicense] = useState<License | null>(null);
@@ -24,46 +24,32 @@ export const LicenseProvider = ({ children }: { children: ReactNode }) => {
 
   const checkLicense = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Récupérer la licence depuis localStorage
+      const storedLicense = localStorage.getItem(LICENSE_STORAGE_KEY);
       
-      if (!user) {
+      if (!storedLicense) {
         setLicense(null);
         setIsLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
-        .from('user_licenses')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
+      const licenseData: License = JSON.parse(storedLicense);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching license:', error);
-      }
-
-      // Check if license is expired
-      if (data) {
-        const expiresAt = new Date(data.expires_at);
-        const now = new Date();
-        
-        if (expiresAt < now) {
-          // License expired, deactivate it
-          await supabase
-            .from('user_licenses')
-            .update({ is_active: false })
-            .eq('id', data.id);
-          setLicense(null);
-        } else {
-          setLicense(data);
-        }
-      } else {
+      // Vérifier si la licence est expirée
+      const expiresAt = new Date(licenseData.expires_at);
+      const now = new Date();
+      
+      if (expiresAt < now) {
+        // Licence expirée
+        localStorage.removeItem(LICENSE_STORAGE_KEY);
         setLicense(null);
+      } else {
+        setLicense(licenseData);
       }
     } catch (error) {
       console.error('Error checking license:', error);
       setLicense(null);
+      localStorage.removeItem(LICENSE_STORAGE_KEY);
     } finally {
       setIsLoading(false);
     }
@@ -71,13 +57,6 @@ export const LicenseProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     checkLicense();
-
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      checkLicense();
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const hasValidLicense = license !== null && license.is_active;

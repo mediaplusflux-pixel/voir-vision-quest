@@ -4,7 +4,7 @@ project_id = "ritdznjnleoeamhkdeeh"
 verify_jwt = false
 
 [functions.verify-user-license]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ffmpeg-start]
 verify_jwt = true

@@ -1,204 +1,279 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useLicense } from '@/contexts/LicenseContext';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { Shield, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Check, X } from "lucide-react";
 
-export const LicenseTab = () => {
-  const { license, refreshLicense } = useLicense();
-  const [licenseKey, setLicenseKey] = useState('');
+const LICENSE_STORAGE_KEY = 'media_plus_license';
+
+interface License {
+  license_key: string;
+  license_level: string;
+  expires_at: string;
+  is_active: boolean;
+  validated_at?: string;
+}
+
+const LicenseTab = () => {
+  const [licenseKey, setLicenseKey] = useState("");
   const [isValidating, setIsValidating] = useState(false);
+  const [license, setLicense] = useState<License | null>(() => {
+    const stored = localStorage.getItem(LICENSE_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  });
+  const { toast } = useToast();
 
   const handleValidateLicense = async () => {
     if (!licenseKey.trim()) {
-      toast.error('Veuillez entrer une clé de licence');
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une clé de licence",
+        variant: "destructive",
+      });
       return;
     }
 
     setIsValidating(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        toast.error('Vous devez être connecté');
-        return;
-      }
-
       const { data, error } = await supabase.functions.invoke('verify-user-license', {
-        body: { licenseKey: licenseKey.trim() },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        body: { license_key: licenseKey },
       });
 
-      if (error) {
-        console.error('Error validating license:', error);
-        toast.error('Erreur lors de la validation de la licence');
-        return;
-      }
+      if (error) throw error;
 
       if (data.valid) {
-        toast.success('Licence activée avec succès!');
-        setLicenseKey('');
-        await refreshLicense();
+        const licenseData: License = {
+          license_key: licenseKey,
+          license_level: data.license_level,
+          expires_at: data.expires_at,
+          is_active: true,
+          validated_at: new Date().toISOString(),
+        };
+
+        // Stocker dans localStorage
+        localStorage.setItem(LICENSE_STORAGE_KEY, JSON.stringify(licenseData));
+        setLicense(licenseData);
+
+        toast({
+          title: "Licence activée",
+          description: `Votre licence ${data.license_level} a été activée avec succès`,
+        });
+
+        setLicenseKey("");
       } else {
-        toast.error(data.message || 'Licence invalide');
+        toast({
+          title: "Licence invalide",
+          description: data.message || "Cette clé de licence n'est pas valide",
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Erreur lors de la validation de la licence');
+    } catch (error: any) {
+      console.error('License validation error:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de vérifier la licence",
+        variant: "destructive",
+      });
     } finally {
       setIsValidating(false);
     }
   };
 
+  const handleRemoveLicense = () => {
+    localStorage.removeItem(LICENSE_STORAGE_KEY);
+    setLicense(null);
+    toast({
+      title: "Licence retirée",
+      description: "La licence a été retirée de cet appareil",
+    });
+  };
+
   const getLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
       case 'premium':
-        return 'bg-gradient-to-r from-amber-500 to-yellow-500';
+        return 'bg-yellow-500';
       case 'pro':
-        return 'bg-gradient-to-r from-blue-500 to-cyan-500';
+        return 'bg-blue-500';
       case 'standard':
-        return 'bg-gradient-to-r from-green-500 to-emerald-500';
+        return 'bg-green-500';
       default:
-        return 'bg-muted';
+        return 'bg-gray-500';
     }
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
       year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
   };
 
+  const isExpired = license ? new Date(license.expires_at) < new Date() : false;
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Statut de la licence
-          </CardTitle>
-          <CardDescription>
-            Gérez votre licence pour accéder à toutes les fonctionnalités
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {license ? (
-            <div className="space-y-4">
-              <Alert className="border-green-500/50 bg-green-500/10">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertDescription className="text-green-700 dark:text-green-300">
-                  Votre licence est active et valide
+    <Card>
+      <CardHeader>
+        <CardTitle>Licence</CardTitle>
+        <CardDescription>
+          Gérez votre clé de licence pour accéder aux fonctionnalités du site
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {license && !isExpired ? (
+          <div className="space-y-4">
+            <Alert className="bg-green-500/10 border-green-500">
+              <Check className="h-4 w-4 text-green-500" />
+              <AlertDescription className="text-green-500">
+                Licence active - Vous avez accès à toutes les fonctionnalités
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-3 p-4 border rounded-lg bg-card">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Niveau</span>
+                <Badge className={getLevelColor(license.license_level)}>
+                  {license.license_level}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Clé</span>
+                <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {license.license_key}
+                </code>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Expire le</span>
+                <span className="text-sm">{formatDate(license.expires_at)}</span>
+              </div>
+
+              {license.validated_at && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Validée le</span>
+                  <span className="text-sm">{formatDate(license.validated_at)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Mettre à jour la licence</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nouvelle clé de licence"
+                  value={licenseKey}
+                  onChange={(e) => setLicenseKey(e.target.value)}
+                  disabled={isValidating}
+                />
+                <Button onClick={handleValidateLicense} disabled={isValidating}>
+                  {isValidating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Validation...
+                    </>
+                  ) : (
+                    "Mettre à jour"
+                  )}
+                </Button>
+              </div>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={handleRemoveLicense}
+                className="w-full mt-2"
+              >
+                Retirer la licence
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {isExpired && (
+              <Alert variant="destructive">
+                <X className="h-4 w-4" />
+                <AlertDescription>
+                  Votre licence a expiré. Veuillez entrer une nouvelle clé.
                 </AlertDescription>
               </Alert>
+            )}
 
-              <div className="grid gap-4">
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Type de licence</p>
-                    <Badge className={`${getLevelColor(license.license_level)} text-white mt-1`}>
-                      {license.license_level.toUpperCase()}
-                    </Badge>
-                  </div>
-                </div>
+            <Alert>
+              <AlertDescription>
+                Vous consultez le site en mode gratuit. Entrez une clé de licence pour débloquer toutes les fonctionnalités.
+              </AlertDescription>
+            </Alert>
 
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Clé de licence</p>
-                    <p className="font-mono mt-1">{license.license_key}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
-                  <div>
-                    <p className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Date d'expiration
-                    </p>
-                    <p className="mt-1">{formatDate(license.expires_at)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Voulez-vous activer une nouvelle licence ?
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Entrez votre nouvelle clé de licence"
-                    value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value)}
-                    disabled={isValidating}
-                  />
-                  <Button
-                    onClick={handleValidateLicense}
-                    disabled={isValidating}
-                  >
-                    {isValidating ? 'Validation...' : 'Mettre à jour'}
-                  </Button>
-                </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Entrer une clé de licence</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Votre clé de licence"
+                  value={licenseKey}
+                  onChange={(e) => setLicenseKey(e.target.value)}
+                  disabled={isValidating}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleValidateLicense();
+                    }
+                  }}
+                />
+                <Button onClick={handleValidateLicense} disabled={isValidating}>
+                  {isValidating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Validation...
+                    </>
+                  ) : (
+                    "Valider"
+                  )}
+                </Button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <Alert className="border-orange-500/50 bg-orange-500/10">
-                <XCircle className="h-4 w-4 text-orange-500" />
-                <AlertDescription className="text-orange-700 dark:text-orange-300">
-                  Aucune licence active. Activez une licence pour accéder à toutes les fonctionnalités.
-                </AlertDescription>
-              </Alert>
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium">Clé de licence</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Entrez votre clé de licence"
-                    value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value)}
-                    disabled={isValidating}
-                  />
-                  <Button
-                    onClick={handleValidateLicense}
-                    disabled={isValidating}
-                  >
-                    {isValidating ? 'Validation...' : 'Activer'}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Format: MEDIA-PLUS-XXXX-YYYY-ZZZZ
-                </p>
-              </div>
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
+              <p className="text-sm font-medium">Avec une licence, vous pouvez :</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Gérer vos chaînes de diffusion
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Uploader des médias dans la bibliothèque
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Configurer la grille de programmes
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-500" />
+                  Diffuser vers des émetteurs TNT
+                </li>
+              </ul>
 
-              <div className="pt-4 border-t space-y-3">
-                <h4 className="font-semibold text-sm">Fonctionnalités sans licence :</h4>
-                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>Accès limité à la bibliothèque</li>
-                  <li>Impossible de diffuser du contenu</li>
-                  <li>Pas d'accès aux flux en direct</li>
-                </ul>
-                
-                <h4 className="font-semibold text-sm pt-2">Avec une licence active :</h4>
-                <ul className="text-sm space-y-1 list-disc list-inside text-green-600 dark:text-green-400">
-                  <li>Accès complet à toutes les fonctionnalités</li>
-                  <li>Diffusion de contenus télévisés</li>
-                  <li>Gestion des flux en direct</li>
-                  <li>Bibliothèque média illimitée</li>
-                </ul>
-              </div>
+              <p className="text-sm font-medium mt-4">Sans licence :</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-blue-500" />
+                  Visualiser l'antenne en direct
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-blue-500" />
+                  Consulter les informations publiques
+                </li>
+              </ul>
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
+
+export default LicenseTab;
