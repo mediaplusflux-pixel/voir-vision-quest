@@ -19,12 +19,19 @@ Deno.serve(async (req) => {
     }
 
     // Validate the license key by calling external validation API
+    const licenseApiKey = Deno.env.get('LICENSE_API_KEY');
+    
+    if (!licenseApiKey) {
+      throw new Error('LICENSE_API_KEY not configured');
+    }
+
     const validationResponse = await fetch(
       'https://nyrjuhmrdfnsaqgwbxwn.supabase.co/functions/v1/validate-license',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${licenseApiKey}`,
         },
         body: JSON.stringify({ license_key }),
       }
