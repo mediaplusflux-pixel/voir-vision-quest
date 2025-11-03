@@ -9,10 +9,9 @@ interface VideoPlayerProps {
   autoPlay?: boolean;
   controls?: boolean;
   className?: string;
-  onEnded?: () => void;
 }
 
-const VideoPlayer = ({ src, poster, autoPlay = false, controls = true, className = "", onEnded }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, poster, autoPlay = false, controls = true, className = "" }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -95,7 +94,6 @@ const VideoPlayer = ({ src, poster, autoPlay = false, controls = true, className
         className="w-full h-full object-contain"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onEnded={onEnded}
       />
       
       {!src && (

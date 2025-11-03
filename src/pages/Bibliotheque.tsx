@@ -35,6 +35,9 @@ const Bibliotheque = () => {
 
   const loadMediaItems = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from("media_library")
         .select("*")
@@ -62,7 +65,8 @@ const Bibliotheque = () => {
     setIsUploading(true);
 
     try {
-      const anonymousUserId = "anonymous-user";
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilisateur non authentifié");
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -79,7 +83,7 @@ const Bibliotheque = () => {
 
         // Create unique file path
         const fileExt = file.name.split(".").pop();
-        const fileName = `${anonymousUserId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
@@ -95,7 +99,7 @@ const Bibliotheque = () => {
         const { error: dbError } = await supabase
           .from("media_library")
           .insert({
-            user_id: anonymousUserId,
+            user_id: user.id,
             title: file.name.replace(/\.[^/.]+$/, ""),
             file_path: fileName,
             file_size: file.size,
