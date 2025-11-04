@@ -1,4 +1,4 @@
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Tv, Trash2, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { usePlaylist } from "@/contexts/PlaylistContext";
+import { useNavigate } from "react-router-dom";
 
 interface MediaItem {
   id: string;
@@ -28,6 +30,8 @@ const Bibliotheque = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { playlist, addToPlaylist, removeFromPlaylist } = usePlaylist();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadMediaItems();
@@ -259,10 +263,67 @@ const Bibliotheque = () => {
         <main className="flex-1 p-8">
           <div className="mb-6 flex items-center justify-between">
             <h1 className="text-foreground text-3xl font-bold">Mes Vidéos</h1>
-            <div className="text-sm text-muted-foreground">
-              {mediaItems.length} vidéo(s)
+            <div className="flex items-center gap-4">
+              <Button
+                variant="default"
+                size="lg"
+                onClick={() => navigate("/")}
+                disabled={playlist.length === 0}
+              >
+                <Tv className="w-5 h-5 mr-2" />
+                Envoyer à l'antenne ({playlist.length}/20)
+              </Button>
+              <div className="text-sm text-muted-foreground">
+                {mediaItems.length} vidéo(s)
+              </div>
             </div>
           </div>
+
+          {playlist.length > 0 && (
+            <Card className="bg-card border-border p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <List className="w-5 h-5 text-primary" />
+                  <h2 className="text-foreground text-xl font-bold">Playlist actuelle</h2>
+                  <span className="text-sm text-muted-foreground">({playlist.length}/20)</span>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    playlist.forEach(item => removeFromPlaylist(item.id));
+                    toast({ title: "Playlist vidée" });
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Vider la playlist
+                </Button>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {playlist.map((item, index) => (
+                  <div key={item.id} className="relative group">
+                    <img
+                      src={item.thumbnail || "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop"}
+                      alt={item.title}
+                      className="w-full aspect-video object-cover rounded"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => removeFromPlaylist(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="absolute top-1 left-1 bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
+                      {index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {mediaItems.map((item) => (
@@ -278,7 +339,21 @@ const Bibliotheque = () => {
                 thumbnail={item.thumbnail || "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400&h=300&fit=crop"}
                 onPreview={() => handlePreview(item)}
                 onDelete={() => handleDelete(item)}
-                onAddToGrid={() => console.log("Add to grid", item.title)}
+                onAddToGrid={() => {
+                  if (playlist.length >= 20) {
+                    toast({
+                      title: "Playlist pleine",
+                      description: "Maximum 20 vidéos dans la playlist",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  addToPlaylist(item);
+                  toast({
+                    title: "Ajouté à la playlist",
+                    description: `${item.title} ajouté à la playlist`,
+                  });
+                }}
               />
             ))}
 

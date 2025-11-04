@@ -36,6 +36,16 @@ serve(async (req) => {
       throw new Error('Missing required parameters');
     }
 
+    // Parse playlist data if source is playlist
+    let playlistData = null;
+    if (source === 'playlist' && sourceUrl) {
+      try {
+        playlistData = JSON.parse(sourceUrl);
+      } catch (e) {
+        console.error('Failed to parse playlist data:', e);
+      }
+    }
+
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
     if (!ffmpegApiKey) {
       throw new Error('FFMPEG_CLOUD_API_KEY not configured');
@@ -53,7 +63,8 @@ serve(async (req) => {
       body: JSON.stringify({
         channelId,
         source,
-        sourceUrl,
+        sourceUrl: playlistData ? playlistData.urls : sourceUrl,
+        loop: playlistData ? playlistData.loop : false,
         userId: user.id,
       }),
     });
