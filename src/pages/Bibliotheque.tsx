@@ -39,17 +39,18 @@ const Bibliotheque = () => {
 
   const loadMediaItems = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
         .from("media_library")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Load error:", error);
+        throw error;
+      }
       setMediaItems(data || []);
     } catch (error: any) {
+      console.error("Error loading media:", error);
       toast({
         title: "Erreur",
         description: "Impossible de charger les médias",
@@ -69,8 +70,12 @@ const Bibliotheque = () => {
     setIsUploading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Utilisateur non authentifié");
+      // Generate a unique anonymous user ID for this session
+      let anonymousUserId = localStorage.getItem('anonymous_user_id');
+      if (!anonymousUserId) {
+        anonymousUserId = `anon_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        localStorage.setItem('anonymous_user_id', anonymousUserId);
+      }
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -85,16 +90,22 @@ const Bibliotheque = () => {
           continue;
         }
 
-        // Create unique file path
+        // Create unique file path (public folder)
         const fileExt = file.name.split(".").pop();
-        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileName = `public/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from("media-library")
-          .upload(fileName, file);
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          throw uploadError;
+        }
 
         // Get video duration
         const duration = await getVideoDuration(file);
@@ -103,7 +114,7 @@ const Bibliotheque = () => {
         const { error: dbError } = await supabase
           .from("media_library")
           .insert({
-            user_id: user.id,
+            user_id: anonymousUserId,
             title: file.name.replace(/\.[^/.]+$/, ""),
             file_path: fileName,
             file_size: file.size,
@@ -111,7 +122,10 @@ const Bibliotheque = () => {
             type: "video",
           });
 
-        if (dbError) throw dbError;
+        if (dbError) {
+          console.error("Database error:", dbError);
+          throw dbError;
+        }
       }
 
       toast({
@@ -121,9 +135,10 @@ const Bibliotheque = () => {
 
       loadMediaItems();
     } catch (error: any) {
+      console.error("Upload error:", error);
       toast({
         title: "Erreur d'importation",
-        description: error.message,
+        description: error.message || "Erreur lors de l'importation",
         variant: "destructive",
       });
     } finally {
