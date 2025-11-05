@@ -7,16 +7,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ffmpeg-start]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ffmpeg-status]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ffmpeg-stop]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ffmpeg-transmit]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ffmpeg-webhook]
 verify_jwt = false
