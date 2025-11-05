@@ -63,11 +63,81 @@ const Bibliotheque = () => {
     fileInputRef.current?.click();
   };
 
+  const validateVideoFile = async (file: File): Promise<{ valid: boolean; error?: string }> => {
+    // Configuration des limites
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+    const MAX_DURATION = 7200; // 2 heures en secondes
+    const ALLOWED_FORMATS = [
+      'video/mp4',
+      'video/webm',
+      'video/ogg',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-matroska',
+    ];
+
+    // 1. Vérifier le type MIME
+    if (!file.type || !ALLOWED_FORMATS.includes(file.type)) {
+      return {
+        valid: false,
+        error: `Format non supporté. Formats acceptés: MP4, WebM, OGG, MOV, AVI, MKV`
+      };
+    }
+
+    // 2. Vérifier l'extension du fichier
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+    if (!fileExt || !allowedExtensions.includes(fileExt)) {
+      return {
+        valid: false,
+        error: `Extension de fichier invalide: .${fileExt}`
+      };
+    }
+
+    // 3. Vérifier la taille du fichier
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      return {
+        valid: false,
+        error: `Fichier trop volumineux (${sizeMB} MB). Taille maximale: 500 MB`
+      };
+    }
+
+    // 4. Vérifier que le fichier n'est pas vide
+    if (file.size === 0) {
+      return {
+        valid: false,
+        error: `Le fichier est vide`
+      };
+    }
+
+    // 5. Vérifier la durée de la vidéo
+    try {
+      const duration = await getVideoDuration(file);
+      if (duration > MAX_DURATION) {
+        const durationMin = Math.floor(duration / 60);
+        return {
+          valid: false,
+          error: `Vidéo trop longue (${durationMin} min). Durée maximale: 2 heures`
+        };
+      }
+    } catch (error) {
+      return {
+        valid: false,
+        error: `Impossible de lire les métadonnées de la vidéo`
+      };
+    }
+
+    return { valid: true };
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
+    let successCount = 0;
+    let failureCount = 0;
 
     try {
       // Génère un UUID v4 anonyme pour satisfaire la colonne `user_id` (uuid)
@@ -90,13 +160,15 @@ const Bibliotheque = () => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        // Validate file type
-        if (!file.type.startsWith("video/")) {
+        // Validation complète du fichier
+        const validation = await validateVideoFile(file);
+        if (!validation.valid) {
           toast({
-            title: "Type de fichier invalide",
-            description: `${file.name} n'est pas une vidéo`,
+            title: `Erreur: ${file.name}`,
+            description: validation.error,
             variant: "destructive",
           });
+          failureCount++;
           continue;
         }
 
@@ -136,14 +208,24 @@ const Bibliotheque = () => {
           console.error("Database error:", dbError);
           throw dbError;
         }
+
+        successCount++;
       }
 
-      toast({
-        title: "Succès",
-        description: `${files.length} fichier(s) importé(s)`,
-      });
-
-      loadMediaItems();
+      // Afficher le résumé de l'import
+      if (successCount > 0) {
+        toast({
+          title: "Succès",
+          description: `${successCount} fichier(s) importé(s) avec succès${failureCount > 0 ? ` (${failureCount} échec(s))` : ''}`,
+        });
+        loadMediaItems();
+      } else if (failureCount > 0) {
+        toast({
+          title: "Aucun fichier importé",
+          description: `${failureCount} fichier(s) ont échoué la validation`,
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       console.error("Upload error:", error);
       toast({
