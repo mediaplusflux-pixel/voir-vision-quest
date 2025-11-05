@@ -70,12 +70,22 @@ const Bibliotheque = () => {
     setIsUploading(true);
 
     try {
-      // Generate a unique anonymous user ID for this session
-      let anonymousUserId = localStorage.getItem('anonymous_user_id');
-      if (!anonymousUserId) {
-        anonymousUserId = `anon_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        localStorage.setItem('anonymous_user_id', anonymousUserId);
-      }
+      // Génère un UUID v4 anonyme pour satisfaire la colonne `user_id` (uuid)
+      const getOrCreateAnonUuid = () => {
+        const key = 'anonymous_user_uuid';
+        let val = localStorage.getItem(key);
+        if (val) return val;
+        const v4 = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              const v = c === 'x' ? r : (r & 0x3) | 0x8;
+              return v.toString(16);
+            });
+        localStorage.setItem(key, v4);
+        return v4;
+      };
+      const anonymousUserId = getOrCreateAnonUuid();
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
