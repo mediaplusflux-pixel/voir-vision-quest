@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import VideoPlayer from "@/components/VideoPlayer";
+import { HLSPlayer } from "@/components/HLSPlayer";
 import Header from "@/components/Header";
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -93,7 +94,7 @@ const Antenne = () => {
             </div>
           </div>
           <div className="p-4">
-            <VideoPlayer 
+            <HLSPlayer 
               src={isLive && broadcast?.hlsUrl ? broadcast.hlsUrl : undefined}
               className="w-full aspect-video"
               autoPlay={isLive}

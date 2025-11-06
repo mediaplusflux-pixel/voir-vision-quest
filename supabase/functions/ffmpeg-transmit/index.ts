@@ -12,24 +12,6 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    );
-
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing authorization header');
-    }
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
-    if (authError || !user) {
-      throw new Error('Unauthorized');
-    }
-
     const { channelId, protocol, url } = await req.json();
 
     if (!channelId || !protocol || !url) {
@@ -60,7 +42,6 @@ serve(async (req) => {
         channelId,
         protocol: protocol.toLowerCase(),
         url,
-        userId: user.id,
       }),
     });
 

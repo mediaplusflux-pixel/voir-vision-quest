@@ -17,8 +17,7 @@ const Chaines = () => {
   const [transmissionConfig, setTransmissionConfig] = useState<Record<string, { protocol: string; url: string }>>({});
 
   const channels = [
-    { id: "conference", name: "CONFÉRENCE" },
-    { id: "intro", name: "INTRO" },
+    { id: "zeedboda", name: "ZEEDBODA" },
   ];
 
   useEffect(() => {

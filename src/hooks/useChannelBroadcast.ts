@@ -31,13 +31,17 @@ export const useChannelBroadcast = () => {
       if (error) throw error;
 
       if (data.success) {
+        // Construire les URLs basées sur le channelId
+        const hlsUrl = `https://media-plus.app/streams/${channelId}.m3u8`;
+        const iframeUrl = `https://media-plus.app/embed/channel/${channelId}`;
+        
         setBroadcasts(prev => ({
           ...prev,
           [channelId]: {
             channelId,
             status: 'live',
-            hlsUrl: data.hlsUrl,
-            iframeUrl: data.iframeUrl,
+            hlsUrl,
+            iframeUrl,
           }
         }));
 
