@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +6,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -15,15 +15,16 @@ serve(async (req) => {
     const { channelId } = await req.json();
 
     if (!channelId) {
-      throw new Error('Missing channelId parameter');
+      throw new Error('Missing required parameter: channelId');
     }
 
+    console.log(`[ffmpeg-stop] Stopping broadcast for channel: ${channelId}`);
+
+    // Get FFmpeg Cloud API key
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
     if (!ffmpegApiKey) {
       throw new Error('FFMPEG_CLOUD_API_KEY not configured');
     }
-
-    console.log(`Stopping broadcast for channel ${channelId}`);
 
     // Call FFmpeg Cloud API
     const response = await fetch(`https://ffmpeg-cloud-api.com/v1/stop/${channelId}`, {
@@ -37,14 +38,14 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('FFmpeg Cloud error:', errorData);
-      throw new Error(`FFmpeg Cloud API error: ${response.status}`);
+      console.error('[ffmpeg-stop] FFmpeg Cloud API error:', response.status, errorData);
+      throw new Error(`FFmpeg Cloud API error: ${response.status} - ${errorData}`);
     }
 
     const data = await response.json();
+    console.log('[ffmpeg-stop] Broadcast stopped successfully:', data);
 
-    console.log('Broadcast stopped successfully:', data);
-
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
@@ -53,11 +54,13 @@ serve(async (req) => {
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       }
     );
   } catch (error) {
-    console.error('Error stopping broadcast:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[ffmpeg-stop] Error stopping broadcast:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     return new Response(
       JSON.stringify({
         success: false,

@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +6,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -15,7 +15,7 @@ serve(async (req) => {
     const { channelId, protocol, url } = await req.json();
 
     if (!channelId || !protocol || !url) {
-      throw new Error('Missing required parameters');
+      throw new Error('Missing required parameters: channelId, protocol, and url are required');
     }
 
     // Validate protocol
@@ -24,12 +24,13 @@ serve(async (req) => {
       throw new Error('Invalid protocol. Must be ip, udp, or rtmp');
     }
 
+    console.log(`[ffmpeg-transmit] Configuring ${protocol} transmission for channel ${channelId}`);
+
+    // Get FFmpeg Cloud API key
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
     if (!ffmpegApiKey) {
       throw new Error('FFMPEG_CLOUD_API_KEY not configured');
     }
-
-    console.log(`Configuring ${protocol} transmission for channel ${channelId}`);
 
     // Call FFmpeg Cloud API
     const response = await fetch('https://ffmpeg-cloud-api.com/v1/transmit', {
@@ -47,14 +48,14 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('FFmpeg Cloud error:', errorData);
-      throw new Error(`FFmpeg Cloud API error: ${response.status}`);
+      console.error('[ffmpeg-transmit] FFmpeg Cloud API error:', response.status, errorData);
+      throw new Error(`FFmpeg Cloud API error: ${response.status} - ${errorData}`);
     }
 
     const data = await response.json();
+    console.log('[ffmpeg-transmit] Transmission configured successfully:', data);
 
-    console.log('Transmission configured successfully:', data);
-
+    // Return success response
     return new Response(
       JSON.stringify({
         success: true,
@@ -65,11 +66,13 @@ serve(async (req) => {
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       }
     );
   } catch (error) {
-    console.error('Error configuring transmission:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[ffmpeg-transmit] Error configuring transmission:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     return new Response(
       JSON.stringify({
         success: false,
