@@ -28,32 +28,51 @@ serve(async (req) => {
 
     // Get FFmpeg Cloud API key
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
-    if (!ffmpegApiKey) {
-      throw new Error('FFMPEG_CLOUD_API_KEY not configured');
+    
+    // MODE SIMULATION pour développement
+    const isSimulationMode = !ffmpegApiKey || ffmpegApiKey.startsWith('demo_');
+    
+    let data;
+    
+    if (isSimulationMode) {
+      console.log('[ffmpeg-transmit] MODE SIMULATION activé');
+      data = {
+        status: 'configured',
+        channelId: channelId,
+        protocol: protocol,
+        url: url,
+        message: 'Transmission configured in simulation mode'
+      };
+    } else {
+      console.log('[ffmpeg-transmit] Calling FFmpeg Cloud API...');
+      try {
+        const response = await fetch('https://ffmpeg-cloud-api.com/v1/transmit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ffmpegApiKey}`,
+          },
+          body: JSON.stringify({
+            channelId,
+            protocol: protocol.toLowerCase(),
+            url,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error('[ffmpeg-transmit] FFmpeg Cloud API error:', response.status, errorData);
+          throw new Error(`FFmpeg Cloud API error: ${response.status} - ${errorData}`);
+        }
+
+        data = await response.json();
+        console.log('[ffmpeg-transmit] Transmission configured successfully:', data);
+      } catch (error) {
+        console.error('[ffmpeg-transmit] Network error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Unable to reach FFmpeg Cloud API: ${errorMessage}`);
+      }
     }
-
-    // Call FFmpeg Cloud API
-    const response = await fetch('https://ffmpeg-cloud-api.com/v1/transmit', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ffmpegApiKey}`,
-      },
-      body: JSON.stringify({
-        channelId,
-        protocol: protocol.toLowerCase(),
-        url,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('[ffmpeg-transmit] FFmpeg Cloud API error:', response.status, errorData);
-      throw new Error(`FFmpeg Cloud API error: ${response.status} - ${errorData}`);
-    }
-
-    const data = await response.json();
-    console.log('[ffmpeg-transmit] Transmission configured successfully:', data);
 
     // Return success response
     return new Response(

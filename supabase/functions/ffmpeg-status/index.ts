@@ -19,27 +19,47 @@ serve(async (req) => {
     }
 
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
-    if (!ffmpegApiKey) {
-      throw new Error('FFMPEG_CLOUD_API_KEY not configured');
+    
+    console.log(`[ffmpeg-status] Fetching status for channel ${channelId}`);
+
+    // MODE SIMULATION pour développement
+    const isSimulationMode = !ffmpegApiKey || ffmpegApiKey.startsWith('demo_');
+    
+    let data;
+    
+    if (isSimulationMode) {
+      console.log('[ffmpeg-status] MODE SIMULATION activé');
+      data = {
+        status: 'idle',
+        channelId: channelId,
+        duration: 0,
+        source: 'unknown',
+        hlsUrl: `https://media-plus.app/streams/${channelId}.m3u8`,
+        iframeUrl: `https://media-plus.app/embed/channel/${channelId}`
+      };
+    } else {
+      console.log('[ffmpeg-status] Calling FFmpeg Cloud API...');
+      try {
+        const response = await fetch(`https://ffmpeg-cloud-api.com/v1/status/${channelId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${ffmpegApiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error('[ffmpeg-status] FFmpeg Cloud error:', errorData);
+          throw new Error(`FFmpeg Cloud API error: ${response.status}`);
+        }
+
+        data = await response.json();
+      } catch (error) {
+        console.error('[ffmpeg-status] Network error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Unable to reach FFmpeg Cloud API: ${errorMessage}`);
+      }
     }
-
-    console.log(`Fetching status for channel ${channelId}`);
-
-    // Call FFmpeg Cloud API
-    const response = await fetch(`https://ffmpeg-cloud-api.com/v1/status/${channelId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${ffmpegApiKey}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('FFmpeg Cloud error:', errorData);
-      throw new Error(`FFmpeg Cloud API error: ${response.status}`);
-    }
-
-    const data = await response.json();
 
     return new Response(
       JSON.stringify({
