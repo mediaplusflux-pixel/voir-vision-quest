@@ -1,63 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-interface BroadcastStatus {
-  channelId: string;
+interface BroadcastState {
   status: 'idle' | 'starting' | 'live' | 'stopping' | 'stopped';
   hlsUrl?: string;
-  iframeUrl?: string;
-  duration?: number;
-  source?: string;
+  playerUrl?: string;
+  iframeCode?: string;
+  viewers?: number;
+  duration?: string;
+  bitrate?: string;
+  streamId?: string;
 }
 
 export const useChannelBroadcast = () => {
-  const [broadcasts, setBroadcasts] = useState<Record<string, BroadcastStatus>>({});
+  const [broadcast, setBroadcast] = useState<BroadcastState>({ status: 'idle' });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const startBroadcast = async (channelId: string, source: 'playlist' | 'live', sourceUrl?: string) => {
+  const startBroadcast = async () => {
     setIsLoading(true);
-    setBroadcasts(prev => ({
-      ...prev,
-      [channelId]: { ...prev[channelId], channelId, status: 'starting' }
-    }));
+    setBroadcast(prev => ({ ...prev, status: 'starting' }));
 
     try {
       const { data, error } = await supabase.functions.invoke('ffmpeg-start', {
-        body: { channelId, source, sourceUrl }
+        body: { 
+          channelId: 'main',
+          source: 'playlist'
+        }
       });
 
       if (error) throw error;
 
       if (data.success) {
-        // Construire les URLs basées sur le channelId
-        const hlsUrl = `https://media-plus.app/streams/${channelId}.m3u8`;
-        const iframeUrl = `https://media-plus.app/embed/channel/${channelId}`;
-        
-        setBroadcasts(prev => ({
-          ...prev,
-          [channelId]: {
-            channelId,
-            status: 'live',
-            hlsUrl,
-            iframeUrl,
-          }
-        }));
+        setBroadcast({
+          status: 'live',
+          hlsUrl: data.hlsUrl || '',
+          playerUrl: data.playerUrl || '',
+          iframeCode: data.iframeCode || '',
+          streamId: data.streamId,
+          viewers: 0,
+          duration: '00:00:00',
+          bitrate: '0',
+        });
 
         toast({
           title: 'Diffusion démarrée',
-          description: `La chaîne ${channelId} est maintenant en direct`,
+          description: 'Votre chaîne est maintenant en direct',
         });
       } else {
-        throw new Error(data.error || 'Erreur inconnue');
+        throw new Error(data.error || 'Erreur lors du démarrage');
       }
     } catch (error: any) {
       console.error('Error starting broadcast:', error);
-      setBroadcasts(prev => ({
-        ...prev,
-        [channelId]: { ...prev[channelId], status: 'idle' }
-      }));
+      setBroadcast({ status: 'idle' });
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible de démarrer la diffusion',
@@ -68,39 +64,29 @@ export const useChannelBroadcast = () => {
     }
   };
 
-  const stopBroadcast = async (channelId: string) => {
+  const stopBroadcast = async () => {
     setIsLoading(true);
-    setBroadcasts(prev => ({
-      ...prev,
-      [channelId]: { ...prev[channelId], status: 'stopping' }
-    }));
+    setBroadcast(prev => ({ ...prev, status: 'stopping' }));
 
     try {
       const { data, error } = await supabase.functions.invoke('ffmpeg-stop', {
-        body: { channelId }
+        body: { streamId: broadcast.streamId }
       });
 
       if (error) throw error;
 
       if (data.success) {
-        setBroadcasts(prev => ({
-          ...prev,
-          [channelId]: { channelId, status: 'stopped' }
-        }));
-
+        setBroadcast({ status: 'stopped' });
         toast({
           title: 'Diffusion arrêtée',
-          description: `La chaîne ${channelId} a été arrêtée`,
+          description: 'Votre chaîne a été mise hors ligne',
         });
       } else {
-        throw new Error(data.error || 'Erreur inconnue');
+        throw new Error(data.error || 'Erreur lors de l\'arrêt');
       }
     } catch (error: any) {
       console.error('Error stopping broadcast:', error);
-      setBroadcasts(prev => ({
-        ...prev,
-        [channelId]: { ...prev[channelId], status: 'live' }
-      }));
+      setBroadcast(prev => ({ ...prev, status: 'live' }));
       toast({
         title: 'Erreur',
         description: error.message || 'Impossible d\'arrêter la diffusion',
@@ -111,68 +97,36 @@ export const useChannelBroadcast = () => {
     }
   };
 
-  const getStatus = async (channelId: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('ffmpeg-status', {
-        body: { channelId }
-      });
+  // Poll for status updates when live
+  useEffect(() => {
+    if (broadcast.status !== 'live' || !broadcast.streamId) return;
 
-      if (error) throw error;
-
-      if (data.success) {
-        setBroadcasts(prev => ({
-          ...prev,
-          [channelId]: {
-            channelId,
-            status: data.status === 'live' ? 'live' : 'stopped',
-            hlsUrl: data.hlsUrl,
-            iframeUrl: data.iframeUrl,
-            duration: data.duration,
-            source: data.source,
-          }
-        }));
-      }
-    } catch (error: any) {
-      console.error('Error getting status:', error);
-    }
-  };
-
-  const configureTransmission = async (channelId: string, protocol: string, url: string) => {
-    setIsLoading(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('ffmpeg-transmit', {
-        body: { channelId, protocol, url }
-      });
-
-      if (error) throw error;
-
-      if (data.success) {
-        toast({
-          title: 'Transmission configurée',
-          description: `La transmission ${protocol.toUpperCase()} a été configurée`,
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await supabase.functions.invoke('ffmpeg-status', {
+          body: { streamId: broadcast.streamId }
         });
-      } else {
-        throw new Error(data.error || 'Erreur inconnue');
+
+        if (data?.success && data.status) {
+          setBroadcast(prev => ({
+            ...prev,
+            viewers: data.viewers || prev.viewers,
+            duration: data.duration || prev.duration,
+            bitrate: data.bitrate || prev.bitrate,
+          }));
+        }
+      } catch (error) {
+        console.error('Error polling status:', error);
       }
-    } catch (error: any) {
-      console.error('Error configuring transmission:', error);
-      toast({
-        title: 'Erreur',
-        description: error.message || 'Impossible de configurer la transmission',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [broadcast.status, broadcast.streamId]);
 
   return {
-    broadcasts,
+    broadcast,
     isLoading,
     startBroadcast,
     stopBroadcast,
-    getStatus,
-    configureTransmission,
   };
 };

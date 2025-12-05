@@ -1,7 +1,6 @@
-import { Play, Pause, Trash2, Eye, Radio, Tv, Power, SkipForward, List } from "lucide-react";
+import { Play, Pause, SkipForward, List, Tv, Power } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
 import VideoPlayer from "@/components/VideoPlayer";
 import { HLSPlayer } from "@/components/HLSPlayer";
 import Header from "@/components/Header";
@@ -14,14 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 
 const Antenne = () => {
   const { playlist, currentIndex, setCurrentIndex, isPlaying, setIsPlaying, playMode, setPlayMode } = usePlaylist();
-  const { broadcasts, isLoading, startBroadcast, stopBroadcast } = useChannelBroadcast();
-  const [isLive, setIsLive] = useState(false);
+  const { broadcast, isLoading, startBroadcast, stopBroadcast } = useChannelBroadcast();
   const [activeSource, setActiveSource] = useState<'playlist' | 'live'>('playlist');
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string>("");
   const { toast } = useToast();
-  
-  const channelId = "zeedboda";
-  const broadcast = broadcasts[channelId];
+
+  const isLive = broadcast?.status === 'live';
 
   useEffect(() => {
     if (playlist.length > 0 && currentIndex < playlist.length) {
@@ -43,23 +40,12 @@ const Antenne = () => {
       return;
     }
 
-    const playlistUrls = playlist.map(item => {
-      const { data } = supabase.storage.from("media-library").getPublicUrl(item.file_path);
-      return data.publicUrl;
-    });
-
-    await startBroadcast(channelId, 'playlist', JSON.stringify({
-      urls: playlistUrls,
-      loop: playMode === 'loop'
-    }));
-    
-    setIsLive(true);
+    await startBroadcast();
     setIsPlaying(true);
   };
 
   const handleStopAntenna = async () => {
-    await stopBroadcast(channelId);
-    setIsLive(false);
+    await stopBroadcast();
     setIsPlaying(false);
   };
 
@@ -108,11 +94,11 @@ const Antenne = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Spectateurs:</span>
-                <span className="text-foreground">{isLive ? "0" : "-"}</span>
+                <span className="text-foreground">{isLive ? broadcast?.viewers || "0" : "-"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Bitrate:</span>
-                <span className="text-foreground">{isLive ? "2500 kbps" : "-"}</span>
+                <span className="text-foreground">{isLive ? `${broadcast?.bitrate || "0"} kbps` : "-"}</span>
               </div>
             </div>
           </div>
