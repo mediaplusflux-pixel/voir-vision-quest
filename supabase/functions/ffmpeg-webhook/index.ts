@@ -3,8 +3,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature',
 };
+
+// HMAC SHA256 signature verification
+async function verifySignature(payload: string, signature: string, secret: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  const hashArray = Array.from(new Uint8Array(signatureBuffer));
+  const expectedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return signature === expectedSignature;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -17,54 +33,78 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify webhook signature for security
-    const signature = req.headers.get('X-FFmpeg-Signature');
-    const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
+    // Get the raw body for signature verification
+    const rawBody = await req.text();
+    const webhookData = JSON.parse(rawBody);
+
+    // Verify webhook signature using HMAC SHA256
+    const signature = req.headers.get('X-Webhook-Signature');
+    const webhookSecret = Deno.env.get('FFMPEG_WEBHOOK_SECRET');
     
-    // Simple signature verification - you should implement proper HMAC verification
-    if (signature !== ffmpegApiKey) {
-      throw new Error('Invalid webhook signature');
+    if (webhookSecret && signature) {
+      const isValid = await verifySignature(rawBody, signature, webhookSecret);
+      if (!isValid) {
+        console.error('[ffmpeg-webhook] Invalid webhook signature');
+        throw new Error('Invalid webhook signature');
+      }
+      console.log('[ffmpeg-webhook] Signature verified successfully');
+    } else {
+      console.warn('[ffmpeg-webhook] No signature verification - webhook secret not configured');
     }
 
-    const webhookData = await req.json();
-    console.log('Received webhook from FFmpeg Cloud:', webhookData);
+    console.log('[ffmpeg-webhook] Received webhook:', JSON.stringify(webhookData));
 
-    const { channelId, event, status, error: errorMsg, timestamp } = webhookData;
+    const { eventType, data } = webhookData;
 
-    if (!channelId || !event) {
-      throw new Error('Invalid webhook payload');
+    if (!eventType) {
+      throw new Error('Invalid webhook payload - missing eventType');
     }
 
-    // Log the event for monitoring
-    console.log(`FFmpeg event for channel ${channelId}: ${event} - ${status}`);
-
-    // Here you could:
-    // 1. Update database with new status
-    // 2. Send notifications to users
-    // 3. Trigger other actions based on events
-
-    // Example: Log to a monitoring table (you'd need to create this table)
-    // await supabaseClient
-    //   .from('broadcast_events')
-    //   .insert({
-    //     channel_id: channelId,
-    //     event_type: event,
-    //     status,
-    //     error_message: errorMsg,
-    //     timestamp: timestamp || new Date().toISOString(),
-    //   });
+    // Handle different event types
+    switch (eventType) {
+      case 'stream.status.changed':
+        console.log(`[ffmpeg-webhook] Stream ${data.streamId} status changed: ${data.previousStatus} -> ${data.currentStatus}`);
+        if (data.m3u8Url) {
+          console.log(`[ffmpeg-webhook] HLS URL: ${data.m3u8Url}`);
+        }
+        break;
+        
+      case 'stream.output.generated':
+        console.log(`[ffmpeg-webhook] Stream ${data.streamId} output generated`);
+        console.log(`[ffmpeg-webhook] Outputs:`, JSON.stringify(data.outputs));
+        if (data.shareableLinks) {
+          console.log(`[ffmpeg-webhook] Shareable links:`, JSON.stringify(data.shareableLinks));
+        }
+        break;
+        
+      case 'stream.error':
+        console.error(`[ffmpeg-webhook] Stream ${data.streamId} error: ${data.errorCode} - ${data.errorMessage}`);
+        break;
+        
+      case 'job.completed':
+        console.log(`[ffmpeg-webhook] Job ${data.jobId} completed`);
+        break;
+        
+      case 'job.failed':
+        console.error(`[ffmpeg-webhook] Job ${data.jobId} failed: ${data.errorMessage}`);
+        break;
+        
+      default:
+        console.log(`[ffmpeg-webhook] Unknown event type: ${eventType}`);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Webhook processed successfully',
+        eventType,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('[ffmpeg-webhook] Error processing webhook:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({
