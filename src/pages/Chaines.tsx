@@ -132,6 +132,25 @@ const Chaines = () => {
             </div>
 
             <div className="space-y-2">
+              <Label>URL IP HTTP (.m3u8)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={broadcast?.ipHttpUrl || 'Démarrez la diffusion pour obtenir le lien'}
+                  readOnly
+                  className="font-mono text-sm bg-muted"
+                />
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => broadcast?.ipHttpUrl && copyToClipboard(broadcast.ipHttpUrl, 'Lien IP HTTP')}
+                  disabled={!broadcast?.ipHttpUrl}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>URL du lecteur</Label>
               <div className="flex gap-2">
                 <Input

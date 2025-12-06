@@ -7,6 +7,7 @@ interface BroadcastState {
   hlsUrl?: string;
   playerUrl?: string;
   iframeCode?: string;
+  ipHttpUrl?: string;
   viewers?: number;
   duration?: string;
   bitrate?: string;
@@ -33,11 +34,13 @@ export const useChannelBroadcast = () => {
       if (error) throw error;
 
       if (data.success) {
+        console.log('[useChannelBroadcast] Broadcast started, received data:', data);
         setBroadcast({
           status: 'live',
           hlsUrl: data.hlsUrl || '',
           playerUrl: data.playerUrl || '',
           iframeCode: data.iframeCode || '',
+          ipHttpUrl: data.ipHttpUrl || '',
           streamId: data.streamId,
           viewers: 0,
           duration: '00:00:00',
