@@ -54,7 +54,7 @@ serve(async (req) => {
       console.log('[ffmpeg-start] Calling FFmpeg API...');
       
       try {
-        // Step 1: Create FFmpeg Job
+        // Step 1: Create FFmpeg Job with required output formats
         const jobResponse = await fetch(`${FFMPEG_API_BASE_URL}/ffmpeg/jobs`, {
           method: 'POST',
           headers: {
@@ -67,7 +67,19 @@ serve(async (req) => {
             outputPath: `/output/${channelId}`,
             ffmpegCommand: 'ffmpeg -i {input} -c:v libx264 -c:a aac {output}',
             outputFormat: 'hls',
-            webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`
+            webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`,
+            // Specify required output links
+            outputLinks: {
+              hlsEnabled: true,        // URL HLS m3u8
+              iframeEnabled: true,     // Lien iframe avec lecteur intégré
+              ipHttpEnabled: true      // Lien IP HTTP m3u8
+            },
+            // Output URLs configuration
+            outputConfig: {
+              hlsPath: `/hls/${channelId}/index.m3u8`,
+              iframePath: `/embed/channel/${channelId}`,
+              ipHttpPath: `/stream/${channelId}/live.m3u8`
+            }
           }),
         });
 
@@ -80,7 +92,7 @@ serve(async (req) => {
         const jobData = await jobResponse.json();
         console.log('[ffmpeg-start] Job created:', jobData);
 
-        // Step 2: Create IP Output Stream
+        // Step 2: Create IP Output Stream with all output formats
         const streamResponse = await fetch(`${FFMPEG_API_BASE_URL}/streams/ip-output`, {
           method: 'POST',
           headers: {
@@ -96,7 +108,27 @@ serve(async (req) => {
             resolution: resolution || '1920x1080',
             segmentDuration: 10,
             playlistLength: 3,
-            webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`
+            webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`,
+            // Request all output link types
+            requestedOutputs: ['hls_m3u8', 'iframe_player', 'ip_http_m3u8'],
+            outputFormats: {
+              hls: {
+                enabled: true,
+                segmentDuration: 10,
+                playlistType: 'event'
+              },
+              iframe: {
+                enabled: true,
+                playerType: 'embedded',
+                autoplay: true,
+                controls: true
+              },
+              ipHttp: {
+                enabled: true,
+                protocol: 'http',
+                format: 'm3u8'
+              }
+            }
           }),
         });
 
