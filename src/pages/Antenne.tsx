@@ -1,4 +1,4 @@
-import { Play, Pause, SkipForward, List, Tv, Power } from "lucide-react";
+import { Play, Pause, SkipForward, List, Tv, Power, Save, StopCircle, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import VideoPlayer from "@/components/VideoPlayer";
@@ -10,12 +10,28 @@ import { usePlaylist } from "@/contexts/PlaylistContext";
 import { useChannelBroadcast } from "@/hooks/useChannelBroadcast";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const Antenne = () => {
-  const { playlist, currentIndex, setCurrentIndex, isPlaying, setIsPlaying, playMode, setPlayMode } = usePlaylist();
+  const { 
+    playlist, 
+    currentIndex, 
+    setCurrentIndex, 
+    isPlaying, 
+    setIsPlaying, 
+    isActive,
+    playMode, 
+    setPlayMode,
+    activatePlaylist,
+    stopPlaylist,
+    savePlaylist,
+  } = usePlaylist();
   const { broadcast, isLoading, startBroadcast, stopBroadcast } = useChannelBroadcast();
   const [activeSource, setActiveSource] = useState<'playlist' | 'live'>('playlist');
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string>("");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [playlistName, setPlaylistName] = useState("");
   const { toast } = useToast();
 
   const isLive = broadcast?.status === 'live';
@@ -207,12 +223,20 @@ const Antenne = () => {
                       <p className="text-muted-foreground text-sm">Vidéo {currentIndex + 1}/{playlist.length}</p>
                     </div>
 
+                    {/* Status indicator */}
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary">
+                      <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                      <span className="text-sm font-medium">
+                        {isActive ? 'Playlist active' : 'Playlist inactive'}
+                      </span>
+                    </div>
+
                     <div className="flex gap-2">
                       <Button 
                         variant="secondary" 
                         className="flex-1"
                         onClick={() => setIsPlaying(!isPlaying)}
-                        disabled={!isLive}
+                        disabled={!isActive}
                       >
                         {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                       </Button>
@@ -221,7 +245,7 @@ const Antenne = () => {
                           variant="secondary" 
                           className="flex-1"
                           onClick={handleNextVideo}
-                          disabled={!isLive}
+                          disabled={!isActive}
                         >
                           <SkipForward className="w-4 h-4" />
                         </Button>
@@ -240,6 +264,89 @@ const Antenne = () => {
                       <p className="text-muted-foreground text-sm">
                         {playMode === 'loop' ? 'Boucle automatique' : 'Avancement manuel'}
                       </p>
+                    </div>
+
+                    {/* Action Buttons: Activer, Arrêter, Enregistrer */}
+                    <div className="border-t border-border pt-4 space-y-2">
+                      <h4 className="text-foreground text-sm font-semibold mb-3">Actions</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button 
+                          variant={isActive ? "secondary" : "default"}
+                          size="sm"
+                          onClick={() => {
+                            activatePlaylist();
+                            toast({
+                              title: "Playlist activée",
+                              description: "La playlist tourne maintenant en arrière-plan",
+                            });
+                          }}
+                          disabled={isActive || playlist.length === 0}
+                          className="flex flex-col items-center gap-1 h-auto py-3"
+                        >
+                          <PlayCircle className="w-5 h-5" />
+                          <span className="text-xs">Activer</span>
+                        </Button>
+                        
+                        <Button 
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            stopPlaylist();
+                            toast({
+                              title: "Playlist arrêtée",
+                              description: "La lecture a été interrompue",
+                            });
+                          }}
+                          disabled={!isActive}
+                          className="flex flex-col items-center gap-1 h-auto py-3"
+                        >
+                          <StopCircle className="w-5 h-5" />
+                          <span className="text-xs">Arrêter</span>
+                        </Button>
+                        
+                        <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              disabled={playlist.length === 0}
+                              className="flex flex-col items-center gap-1 h-auto py-3"
+                            >
+                              <Save className="w-5 h-5" />
+                              <span className="text-xs">Enregistrer</span>
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Enregistrer la playlist</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 pt-4">
+                              <Input
+                                placeholder="Nom de la playlist"
+                                value={playlistName}
+                                onChange={(e) => setPlaylistName(e.target.value)}
+                              />
+                              <Button 
+                                className="w-full"
+                                onClick={() => {
+                                  if (playlistName.trim()) {
+                                    savePlaylist(playlistName.trim());
+                                    toast({
+                                      title: "Playlist enregistrée",
+                                      description: `"${playlistName}" a été sauvegardée`,
+                                    });
+                                    setPlaylistName("");
+                                    setSaveDialogOpen(false);
+                                  }
+                                }}
+                                disabled={!playlistName.trim()}
+                              >
+                                Enregistrer
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                     </div>
                   </div>
                 ) : (
