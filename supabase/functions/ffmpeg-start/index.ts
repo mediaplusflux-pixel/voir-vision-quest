@@ -147,15 +147,25 @@ serve(async (req) => {
       }
     }
 
-    // Return success response
+    // Build output URLs - use API response or generate defaults
+    const hlsUrl = data.hlsUrl || data.m3u8Url || `https://mediaplus.broadcast/hls/${channelId}/index.m3u8`;
+    const playerUrl = data.playerUrl || `https://mediaplus.broadcast/player/${channelId}`;
+    const iframeCode = data.iframeCode || `<iframe src="https://mediaplus.broadcast/embed/channel/${channelId}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+    const ipHttpUrl = data.ipHttpUrl || `http://mediaplus.broadcast/stream/${channelId}/live.m3u8`;
+
+    console.log('[ffmpeg-start] Output URLs:', { hlsUrl, playerUrl, iframeCode, ipHttpUrl });
+
+    // Return success response with all output links
     return new Response(
       JSON.stringify({
         success: true,
         channelId,
         streamId: data.streamId,
-        hlsUrl: data.m3u8Url || `https://mediaplus.broadcast/hls/${channelId}/index.m3u8`,
+        hlsUrl,
+        playerUrl,
+        iframeCode,
+        ipHttpUrl,
         dashUrl: data.dashUrl,
-        iframeUrl: `https://mediaplus.broadcast/embed/channel/${channelId}`,
         status: data.status || 'streaming',
       }),
       {
