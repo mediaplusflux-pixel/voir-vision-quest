@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { LicenseProvider } from "@/contexts/LicenseContext";
 import { PlaylistProvider } from "@/contexts/PlaylistContext";
 import Antenne from "./pages/Antenne";
@@ -20,18 +21,20 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <LicenseProvider>
-          <PlaylistProvider>
-            <Routes>
-            <Route path="/" element={<Antenne />} />
-            <Route path="/chaines" element={<Chaines />} />
-            <Route path="/bibliotheque" element={<Bibliotheque />} />
-            <Route path="/grille" element={<Grille />} />
-            <Route path="/transmission" element={<Transmission />} />
-            <Route path="*" element={<NotFound />} />
-            </Routes>
-          </PlaylistProvider>
-        </LicenseProvider>
+        <AuthProvider>
+          <LicenseProvider>
+            <PlaylistProvider>
+              <Routes>
+                <Route path="/" element={<Antenne />} />
+                <Route path="/chaines" element={<Chaines />} />
+                <Route path="/bibliotheque" element={<Bibliotheque />} />
+                <Route path="/grille" element={<Grille />} />
+                <Route path="/transmission" element={<Transmission />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </PlaylistProvider>
+          </LicenseProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
