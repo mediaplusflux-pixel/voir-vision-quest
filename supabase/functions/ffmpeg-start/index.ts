@@ -5,7 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FFMPEG_API_BASE_URL = 'https://ffmpeg-api.mediaplus.broadcast/api/v1';
+// URL de l'API FFmpeg - peut être configuré via secret FFMPEG_API_URL
+const getFFmpegApiUrl = () => {
+  const customUrl = Deno.env.get('FFMPEG_API_URL');
+  if (customUrl) return customUrl;
+  return null; // Pas d'URL par défaut - mode simulation activé
+};
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -29,33 +34,51 @@ serve(async (req) => {
         playlistData = JSON.parse(sourceUrl);
         console.log(`[ffmpeg-start] Parsed playlist with ${playlistData.urls?.length || 0} videos`);
       } catch (e) {
-        console.error('[ffmpeg-start] Failed to parse playlist data:', e);
+        console.log('[ffmpeg-start] sourceUrl is not JSON, using as direct URL');
       }
     }
 
-    // Get FFmpeg API key
+    // Get FFmpeg API configuration
     const ffmpegApiKey = Deno.env.get('FFMPEG_CLOUD_API_KEY');
+    const ffmpegApiUrl = getFFmpegApiUrl();
 
-    // MODE SIMULATION pour développement
-    const isSimulationMode = !ffmpegApiKey || ffmpegApiKey.startsWith('demo_') || ffmpegApiKey.startsWith('sk_test_');
+    // MODE SIMULATION: activé si pas d'URL API configurée ou clé de test
+    const isSimulationMode = !ffmpegApiUrl || !ffmpegApiKey || ffmpegApiKey.startsWith('demo_') || ffmpegApiKey.startsWith('sk_test_');
     
     let data;
     
     if (isSimulationMode) {
-      console.log('[ffmpeg-start] MODE SIMULATION activé - pas d\'appel API réel');
+      console.log('[ffmpeg-start] MODE SIMULATION activé - génération de liens de test');
+      
+      // Générer un ID de stream unique
+      const streamId = `sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // URLs de simulation basées sur le projet Supabase
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://demo.supabase.co';
+      const baseMediaUrl = `${supabaseUrl}/storage/v1/object/public/media-library`;
+      
       data = {
-        streamId: Math.floor(Math.random() * 1000),
-        status: 'streaming',
-        m3u8Url: `https://mediaplus.broadcast/hls/${channelId}/index.m3u8`,
-        dashUrl: `https://mediaplus.broadcast/dash/${channelId}/manifest.mpd`,
-        message: 'Broadcast started in simulation mode'
+        streamId,
+        status: 'live',
+        hlsUrl: `${baseMediaUrl}/hls/${channelId}/index.m3u8`,
+        playerUrl: `${supabaseUrl}/player/${channelId}`,
+        iframeCode: `<iframe src="${supabaseUrl}/embed/${channelId}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`,
+        ipHttpUrl: `${supabaseUrl}/stream/${channelId}/live.m3u8`,
+        dashUrl: `${baseMediaUrl}/dash/${channelId}/manifest.mpd`,
+        message: 'Diffusion démarrée en mode simulation',
+        simulationMode: true,
+        viewers: Math.floor(Math.random() * 100) + 10,
+        bitrate: bitrate || '5000',
+        resolution: resolution || '1920x1080',
       };
+      
+      console.log('[ffmpeg-start] Simulation data generated:', data);
     } else {
-      console.log('[ffmpeg-start] Calling FFmpeg API...');
+      console.log(`[ffmpeg-start] Calling real FFmpeg API at: ${ffmpegApiUrl}`);
       
       try {
-        // Step 1: Create FFmpeg Job with required output formats
-        const jobResponse = await fetch(`${FFMPEG_API_BASE_URL}/ffmpeg/jobs`, {
+        // Step 1: Create FFmpeg Job
+        const jobResponse = await fetch(`${ffmpegApiUrl}/ffmpeg/jobs`, {
           method: 'POST',
           headers: {
             'X-API-Key': ffmpegApiKey,
@@ -68,13 +91,11 @@ serve(async (req) => {
             ffmpegCommand: 'ffmpeg -i {input} -c:v libx264 -c:a aac {output}',
             outputFormat: 'hls',
             webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`,
-            // Specify required output links
             outputLinks: {
-              hlsEnabled: true,        // URL HLS m3u8
-              iframeEnabled: true,     // Lien iframe avec lecteur intégré
-              ipHttpEnabled: true      // Lien IP HTTP m3u8
+              hlsEnabled: true,
+              iframeEnabled: true,
+              ipHttpEnabled: true
             },
-            // Output URLs configuration
             outputConfig: {
               hlsPath: `/hls/${channelId}/index.m3u8`,
               iframePath: `/embed/channel/${channelId}`,
@@ -92,8 +113,8 @@ serve(async (req) => {
         const jobData = await jobResponse.json();
         console.log('[ffmpeg-start] Job created:', jobData);
 
-        // Step 2: Create IP Output Stream with all output formats
-        const streamResponse = await fetch(`${FFMPEG_API_BASE_URL}/streams/ip-output`, {
+        // Step 2: Create IP Output Stream
+        const streamResponse = await fetch(`${ffmpegApiUrl}/streams/ip-output`, {
           method: 'POST',
           headers: {
             'X-API-Key': ffmpegApiKey,
@@ -109,25 +130,11 @@ serve(async (req) => {
             segmentDuration: 10,
             playlistLength: 3,
             webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/ffmpeg-webhook`,
-            // Request all output link types
             requestedOutputs: ['hls_m3u8', 'iframe_player', 'ip_http_m3u8'],
             outputFormats: {
-              hls: {
-                enabled: true,
-                segmentDuration: 10,
-                playlistType: 'event'
-              },
-              iframe: {
-                enabled: true,
-                playerType: 'embedded',
-                autoplay: true,
-                controls: true
-              },
-              ipHttp: {
-                enabled: true,
-                protocol: 'http',
-                format: 'm3u8'
-              }
+              hls: { enabled: true, segmentDuration: 10, playlistType: 'event' },
+              iframe: { enabled: true, playerType: 'embedded', autoplay: true, controls: true },
+              ipHttp: { enabled: true, protocol: 'http', format: 'm3u8' }
             }
           }),
         });
@@ -147,15 +154,14 @@ serve(async (req) => {
       }
     }
 
-    // Build output URLs - use API response or generate defaults
-    const hlsUrl = data.hlsUrl || data.m3u8Url || `https://mediaplus.broadcast/hls/${channelId}/index.m3u8`;
-    const playerUrl = data.playerUrl || `https://mediaplus.broadcast/player/${channelId}`;
-    const iframeCode = data.iframeCode || `<iframe src="https://mediaplus.broadcast/embed/channel/${channelId}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
-    const ipHttpUrl = data.ipHttpUrl || `http://mediaplus.broadcast/stream/${channelId}/live.m3u8`;
+    // Build output URLs
+    const hlsUrl = data.hlsUrl || data.m3u8Url || `https://stream.example.com/hls/${channelId}/index.m3u8`;
+    const playerUrl = data.playerUrl || `https://stream.example.com/player/${channelId}`;
+    const iframeCode = data.iframeCode || `<iframe src="https://stream.example.com/embed/${channelId}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+    const ipHttpUrl = data.ipHttpUrl || `http://stream.example.com/stream/${channelId}/live.m3u8`;
 
-    console.log('[ffmpeg-start] Output URLs:', { hlsUrl, playerUrl, iframeCode, ipHttpUrl });
+    console.log('[ffmpeg-start] Broadcast started successfully');
 
-    // Return success response with all output links
     return new Response(
       JSON.stringify({
         success: true,
@@ -166,7 +172,10 @@ serve(async (req) => {
         iframeCode,
         ipHttpUrl,
         dashUrl: data.dashUrl,
-        status: data.status || 'streaming',
+        status: data.status || 'live',
+        simulationMode: isSimulationMode,
+        viewers: data.viewers || 0,
+        bitrate: data.bitrate || bitrate || '5000',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
