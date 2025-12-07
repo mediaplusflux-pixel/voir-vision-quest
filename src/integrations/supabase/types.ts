@@ -59,6 +59,42 @@ export type Database = {
         }
         Relationships: []
       }
+      active_playlists: {
+        Row: {
+          created_at: string
+          current_index: number
+          id: string
+          is_playing: boolean
+          items: Json
+          name: string
+          play_mode: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_index?: number
+          id?: string
+          is_playing?: boolean
+          items?: Json
+          name?: string
+          play_mode?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_index?: number
+          id?: string
+          is_playing?: boolean
+          items?: Json
+          name?: string
+          play_mode?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       media_library: {
         Row: {
           created_at: string
