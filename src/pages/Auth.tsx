@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -16,8 +15,7 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const { isAdmin } = useAdminAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [tab, setTab] = useState("signin");
 
@@ -26,16 +24,29 @@ const Auth = () => {
     password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
   });
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated - wait for auth to finish loading
   useEffect(() => {
-    if (isAuthenticated) {
-      if (isAdmin) {
-        navigate("/admin");
-      } else {
-        navigate("/");
-      }
+    if (!authLoading && isAuthenticated) {
+      navigate("/", { replace: true });
     }
-  }, [isAuthenticated, isAdmin, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If authenticated, don't render the form
+  if (isAuthenticated) {
+    return null;
+  }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,30 +71,11 @@ const Auth = () => {
 
       toast({
         title: "Compte créé",
-        description: "Votre compte a été créé avec succès",
+        description: "Votre compte a été créé avec succès. Redirection...",
       });
 
-      // Check if user is admin and redirect accordingly (if session exists)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .eq('role', 'admin')
-          .single();
-
-        if (roleData) {
-          navigate("/admin");
-        } else {
-          navigate("/");
-        }
-      } else {
-        toast({
-          title: "Vérifiez votre email",
-          description: "Si nécessaire, validez votre adresse pour vous connecter.",
-        });
-      }
+      // The onAuthStateChange in AuthContext will handle updating isAuthenticated
+      // and the useEffect above will handle the redirect
     } catch (error: any) {
       if (error?.status === 422 || /already registered|already exists/i.test(error?.message)) {
         toast({
@@ -114,7 +106,7 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -123,34 +115,11 @@ const Auth = () => {
 
       toast({
         title: "Connexion réussie",
-        description: "Bienvenue",
+        description: "Bienvenue ! Redirection...",
       });
 
-      // Ensure session is fully available before navigating to avoid guard race conditions
-      const waitForSession = async (timeout = 2000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) return session;
-          await new Promise((r) => setTimeout(r, 50));
-        }
-        return null;
-      };
-      await waitForSession();
-
-      // Check if user is admin and redirect accordingly
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', data.user.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (roleData) {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      // The onAuthStateChange in AuthContext will handle updating isAuthenticated
+      // and the useEffect above will handle the redirect
     } catch (error: any) {
       const msg = /invalid login credentials/i.test(error?.message)
         ? "Identifiants incorrects. Vérifiez votre email et votre mot de passe."
