@@ -1,9 +1,20 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Key } from "lucide-react";
+import { LogOut, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   
   const navItems = [
     { path: "/chaines", label: "Chaînes" },
@@ -12,6 +23,11 @@ const Header = () => {
     { path: "/grille", label: "Grille" },
     { path: "/transmission", label: "Transmission TNT" },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/auth");
+  };
 
   return (
     <header className="bg-black border-b border-border px-8 py-4">
@@ -44,13 +60,28 @@ const Header = () => {
           <div className="text-foreground text-lg font-mono">
             {new Date().toLocaleTimeString('fr-FR')}
           </div>
-          <Link 
-            to="/chaines" 
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            title="Gérer la licence"
-          >
-            <Key className="w-5 h-5" />
-          </Link>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                <User className="w-5 h-5" />
+                <span className="max-w-[150px] truncate text-sm">
+                  {user?.email || "Utilisateur"}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium">{user?.email}</p>
+                <p className="text-xs text-muted-foreground">Connecté</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                <LogOut className="w-4 h-4 mr-2" />
+                Se déconnecter
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
