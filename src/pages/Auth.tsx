@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,10 +12,11 @@ import { useAuth } from "@/contexts/AuthContext";
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   const [tab, setTab] = useState("signin");
 
@@ -24,15 +25,16 @@ const Auth = () => {
     password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
   });
 
-  // Redirect if already authenticated - wait for auth to finish loading
+  // Handle redirect after authentication
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      navigate("/", { replace: true });
+    if (!isLoading && isAuthenticated) {
+      const from = (location.state as { from?: string })?.from || "/";
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate, location.state]);
 
-  // Show loading while checking auth
-  if (authLoading) {
+  // Show loading spinner while checking auth state
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -43,20 +45,29 @@ const Auth = () => {
     );
   }
 
-  // If authenticated, don't render the form
+  // Show redirect message if authenticated
   if (isAuthenticated) {
-    return null;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Redirection...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     const parsed = schema.safeParse({ email, password });
     if (!parsed.success) {
       const msg = parsed.error.issues[0]?.message ?? "Veuillez vérifier vos informations.";
       toast({ title: "Validation requise", description: msg, variant: "destructive" });
       return;
     }
-    setIsLoading(true);
+    
+    setIsSubmitting(true);
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -71,11 +82,8 @@ const Auth = () => {
 
       toast({
         title: "Compte créé",
-        description: "Votre compte a été créé avec succès. Redirection...",
+        description: "Votre compte a été créé avec succès !",
       });
-
-      // The onAuthStateChange in AuthContext will handle updating isAuthenticated
-      // and the useEffect above will handle the redirect
     } catch (error: any) {
       if (error?.status === 422 || /already registered|already exists/i.test(error?.message)) {
         toast({
@@ -91,19 +99,21 @@ const Auth = () => {
         });
       }
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     const parsed = schema.safeParse({ email, password });
     if (!parsed.success) {
       const msg = parsed.error.issues[0]?.message ?? "Veuillez vérifier vos informations.";
       toast({ title: "Validation requise", description: msg, variant: "destructive" });
       return;
     }
-    setIsLoading(true);
+    
+    setIsSubmitting(true);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -115,11 +125,8 @@ const Auth = () => {
 
       toast({
         title: "Connexion réussie",
-        description: "Bienvenue ! Redirection...",
+        description: "Bienvenue !",
       });
-
-      // The onAuthStateChange in AuthContext will handle updating isAuthenticated
-      // and the useEffect above will handle the redirect
     } catch (error: any) {
       const msg = /invalid login credentials/i.test(error?.message)
         ? "Identifiants incorrects. Vérifiez votre email et votre mot de passe."
@@ -130,7 +137,7 @@ const Auth = () => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -138,14 +145,17 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Holos Broadcast</CardTitle>
+          <CardTitle className="text-2xl">
+            <span className="text-foreground">MEDIA</span>
+            <span className="text-primary">+</span>
+          </CardTitle>
           <CardDescription>
-            Créez votre compte ou connectez-vous
+            Connectez-vous pour accéder à votre espace de diffusion
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={tab} onValueChange={setTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="signin">Connexion</TabsTrigger>
               <TabsTrigger value="signup">Inscription</TabsTrigger>
             </TabsList>
@@ -163,7 +173,7 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="votre@email.com"
                     required
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div className="space-y-2">
@@ -177,11 +187,11 @@ const Auth = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Connexion..." : "Se connecter"}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Connexion..." : "Se connecter"}
                 </Button>
               </form>
             </TabsContent>
@@ -199,7 +209,7 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="votre@email.com"
                     required
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div className="space-y-2">
@@ -213,12 +223,12 @@ const Auth = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                     minLength={6}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Création..." : "Créer un compte"}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Création..." : "Créer un compte"}
                 </Button>
               </form>
             </TabsContent>
