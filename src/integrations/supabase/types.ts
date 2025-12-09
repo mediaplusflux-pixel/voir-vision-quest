@@ -95,6 +95,45 @@ export type Database = {
         }
         Relationships: []
       }
+      channels: {
+        Row: {
+          created_at: string
+          hls_output_url: string | null
+          id: string
+          name: string
+          rtmp_output_url: string | null
+          source_url: string | null
+          status: string
+          stream_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hls_output_url?: string | null
+          id?: string
+          name: string
+          rtmp_output_url?: string | null
+          source_url?: string | null
+          status?: string
+          stream_key?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hls_output_url?: string | null
+          id?: string
+          name?: string
+          rtmp_output_url?: string | null
+          source_url?: string | null
+          status?: string
+          stream_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       media_library: {
         Row: {
           created_at: string

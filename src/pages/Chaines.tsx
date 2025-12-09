@@ -1,15 +1,31 @@
-import { Play, Copy, Radio, Users, Clock, Activity } from "lucide-react";
+import { useState } from "react";
+import { Play, Copy, Radio, Users, Clock, Activity, Tv } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Header from "@/components/Header";
+import ChannelCard from "@/components/ChannelCard";
+import CreateChannelDialog from "@/components/CreateChannelDialog";
+import { useChannels, type Channel } from "@/hooks/useChannels";
 import { useChannelBroadcast } from "@/hooks/useChannelBroadcast";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Chaines = () => {
+  const { channels, isLoading: channelsLoading, createChannel, deleteChannel, updateChannel } = useChannels();
   const { broadcast, isLoading, startBroadcast, stopBroadcast } = useChannelBroadcast();
   const { toast } = useToast();
+  const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
   const isLive = broadcast?.status === 'live';
   const isStarting = broadcast?.status === 'starting';
@@ -31,6 +47,21 @@ const Chaines = () => {
     }
   };
 
+  const handleDeleteChannel = async () => {
+    if (channelToDelete) {
+      await deleteChannel(channelToDelete);
+      setChannelToDelete(null);
+    }
+  };
+
+  const handleEditChannel = (channel: Channel) => {
+    // For now, just show a toast - could implement a full edit dialog later
+    toast({
+      title: "Modification",
+      description: "Fonctionnalité de modification à venir",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -38,10 +69,11 @@ const Chaines = () => {
       <div className="p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-foreground text-3xl font-bold">Tableau de bord</h1>
-            <p className="text-muted-foreground mt-1">Statistiques et diffusion de votre chaîne</p>
+            <h1 className="text-foreground text-3xl font-bold">Chaînes</h1>
+            <p className="text-muted-foreground mt-1">Gérez vos chaînes et leurs liens de diffusion</p>
           </div>
           <div className="flex items-center gap-3">
+            <CreateChannelDialog onCreate={createChannel} />
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${isLive ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
               <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
               <span className="text-sm font-medium">{isLive ? 'EN DIRECT' : 'Hors ligne'}</span>
@@ -53,16 +85,12 @@ const Chaines = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Statut</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Chaînes</CardTitle>
+              <Tv className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {isLive ? 'Actif' : isStarting ? 'Démarrage...' : isStopping ? 'Arrêt...' : 'Inactif'}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {isLive ? 'Diffusion en cours' : 'En attente de diffusion'}
-              </p>
+              <div className="text-2xl font-bold">{channels.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">Total configurées</p>
             </CardContent>
           </Card>
 
@@ -100,15 +128,51 @@ const Chaines = () => {
           </Card>
         </div>
 
-        {/* Output Links Section */}
+        {/* Channels List */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Tv className="h-5 w-5" />
+            Mes chaînes
+          </h2>
+          
+          {channelsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
+          ) : channels.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Tv className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">Aucune chaîne</h3>
+                <p className="text-muted-foreground text-center mb-4">
+                  Créez votre première chaîne pour générer des liens de diffusion
+                </p>
+                <CreateChannelDialog onCreate={createChannel} />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {channels.map((channel) => (
+                <ChannelCard
+                  key={channel.id}
+                  channel={channel}
+                  onDelete={(id) => setChannelToDelete(id)}
+                  onEdit={handleEditChannel}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Legacy Output Links Section */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Radio className="h-5 w-5" />
-              Liens de sortie
+              Diffusion en direct
             </CardTitle>
             <CardDescription>
-              Copiez ces liens pour partager votre diffusion
+              Démarrez une diffusion pour générer les liens de lecture
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -203,6 +267,24 @@ const Chaines = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!channelToDelete} onOpenChange={() => setChannelToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette chaîne ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Les liens de sortie RTMP et HLS seront également supprimés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteChannel} className="bg-destructive hover:bg-destructive/90">
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
