@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 
@@ -9,52 +9,79 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   validateKey: (key: string) => Promise<{ success: boolean; message: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Prevent double initialization
+    if (initialized) return;
+
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // Get the initial session
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        if (mounted) {
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+          setIsLoading(false);
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+        if (mounted) {
+          setIsLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
+    // Set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setUserId(session?.user?.id ?? null);
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
+      (event, currentSession) => {
+        // Only update if mounted and after initial load
+        if (mounted) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          
+          // If we receive an auth event and still loading, mark as done
+          if (isLoading) {
+            setIsLoading(false);
+            setInitialized(true);
+          }
+        }
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setUserId(session?.user?.id ?? null);
-      setIsAuthenticated(!!session);
-      setIsLoading(false);
-    });
+    // Initialize auth
+    initializeAuth();
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [initialized, isLoading]);
 
-  const getMachineId = () => {
+  const getMachineId = useCallback(() => {
     let machineId = localStorage.getItem('machine_id');
     if (!machineId) {
       machineId = crypto.randomUUID();
       localStorage.setItem('machine_id', machineId);
     }
     return machineId;
-  };
+  }, []);
 
-  const validateKey = async (key: string): Promise<{ success: boolean; message: string }> => {
+  const validateKey = useCallback(async (key: string): Promise<{ success: boolean; message: string }> => {
     try {
       const machineId = getMachineId();
       
@@ -70,7 +97,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data?.valid) {
         localStorage.setItem('activation_key_id', data.keyId);
         localStorage.setItem('activation_expires_at', data.expiresAt);
-        setIsAuthenticated(true);
         return { success: true, message: data.message };
       }
 
@@ -79,20 +105,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Validation error:', error);
       return { success: false, message: 'Erreur de connexion' };
     }
-  };
+  }, [getMachineId]);
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('activation_key_id');
-    localStorage.removeItem('activation_expires_at');
-    setIsAuthenticated(false);
-    setUserId(null);
-    setUser(null);
-    setSession(null);
-  };
+  const logout = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('activation_key_id');
+      localStorage.removeItem('activation_expires_at');
+      setUser(null);
+      setSession(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }, []);
+
+  // Derive isAuthenticated from session
+  const isAuthenticated = !!session?.user;
+  const userId = session?.user?.id ?? null;
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, userId, user, session, validateKey, logout }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      isLoading, 
+      userId, 
+      user, 
+      session, 
+      validateKey, 
+      logout 
+    }}>
       {children}
     </AuthContext.Provider>
   );
